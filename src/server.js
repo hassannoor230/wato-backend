@@ -34,7 +34,6 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
       cb(new Error('CORS blocked'));
     },
-    allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   })
 );
