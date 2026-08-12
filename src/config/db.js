@@ -1,34 +1,32 @@
 import mongoose from 'mongoose';
 
-export async function connectDB() {
-  const uri = process.env.MONGODB_URI;
+let connecting = null;
 
+export async function connectDB() {
+  if (mongoose.connection.readyState >= 1) return mongoose.connection;
+  if (connecting) return connecting;
+
+  const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.error('FATAL: MONGODB_URI is missing from environment variables.');
-    console.error('Please set MONGODB_URI in your .env file.');
-    process.exit(1);
+    const err = new Error('MONGODB_URI is missing from environment variables.');
+    console.error('FATAL: ' + err.message);
+    console.error('Set MONGODB_URI in your .env file or Vercel project environment variables.');
+    throw err;
   }
 
-  mongoose.connection.on('connected', () => {
-    console.log('MongoDB connected');
-  });
-
-  mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err.message);
-  });
-
-  mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB disconnected');
-  });
-
-  mongoose.connection.on('reconnected', () => {
-    console.log('MongoDB reconnected');
-  });
+  if (!global.__mongooseListenersRegistered) {
+    mongoose.connection.on('connected', () => console.log('MongoDB connected'));
+    mongoose.connection.on('error', (err) => console.error('MongoDB connection error:', err.message));
+    mongoose.connection.on('disconnected', () => console.log('MongoDB disconnected'));
+    mongoose.connection.on('reconnected', () => console.log('MongoDB reconnected'));
+    global.__mongooseListenersRegistered = true;
+  }
 
   try {
-    console.log('Attempting MongoDB connection...');
-    await mongoose.connect(uri);
+    connecting = mongoose.connect(uri);
+    await connecting;
     console.log('MongoDB connected successfully');
+    return mongoose.connection;
   } catch (err) {
     console.error('FATAL: MongoDB connection failed.');
     console.error('Possible causes:');
@@ -42,6 +40,8 @@ export async function connectDB() {
     console.error('Error details:', err.message);
     console.error('Error code:', err.code);
     console.error('Error name:', err.name);
-    process.exit(1);
+    throw err;
+  } finally {
+    connecting = null;
   }
 }

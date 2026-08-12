@@ -18,7 +18,7 @@ const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map(x => x.trim());
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map((x) => x.trim());
 app.use(
   cors({
     origin: (origin, cb) => {
@@ -35,6 +35,26 @@ app.use(morgan('dev'));
 
 app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'WATO Backend API is running',
+    service: 'Ahmad Wattoo Real Estate API',
+    time: new Date().toISOString(),
+  });
+});
+
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Ahmad Wattoo Real Estate API',
+    version: '1.0.0',
+    status: 'ok',
+    time: new Date().toISOString(),
+    endpoints: ['/api/health', '/api/properties'],
+  });
+});
+
 app.get('/api/health', (req, res) => {
   const dbState = mongoose.connection.readyState;
   res.json({
@@ -43,6 +63,17 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
     database: dbState === 1 ? 'connected' : 'disconnected',
   });
+});
+
+app.use(async (req, res, next) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB();
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use('/api/auth', auth);
@@ -55,14 +86,19 @@ app.use('/api/dashboard', dashboard);
 app.use(notFound);
 app.use(errorHandler);
 
-await connectDB();
-
 const port = Number(process.env.PORT || 5000);
 
 if (!process.env.VERCEL) {
-  app.listen(port, () => {
-    console.log(`API running on http://localhost:${port}`);
-  });
+  connectDB()
+    .then(() => {
+      app.listen(port, () => {
+        console.log(`API running on http://localhost:${port}`);
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to start server: MongoDB connection failed.', err.message);
+      process.exit(1);
+    });
 }
 
 export default app;
