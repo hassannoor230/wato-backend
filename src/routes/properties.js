@@ -129,6 +129,9 @@ router.delete('/:id', async (req, res, next) => {
 router.post('/upload', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
   try {
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return res.status(500).json({ message: 'Cloudinary is not configured on the server. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.' });
+    }
     const result = await uploadToCloudinary(req.file.buffer, 'properties');
     res.json({
       data: {
