@@ -13,6 +13,7 @@ import enquiries from './routes/enquiries.js';
 import settings from './routes/settings.js';
 import dashboard from './routes/dashboard.js';
 import { notFound, errorHandler } from './middleware/error.js';
+import { seed } from './seed.js';
 
 const app = express();
 
@@ -78,6 +79,19 @@ app.get('/api/health', (req, res) => {
     time: new Date().toISOString(),
     database: dbState === 1 ? 'connected' : 'disconnected',
   });
+});
+
+app.post('/api/admin/seed', async (req, res) => {
+  const secret = req.headers['x-vercel-seed-secret'];
+  if (!process.env.VERCEL_SEED_SECRET || secret !== process.env.VERCEL_SEED_SECRET) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  try {
+    await seed();
+    res.json({ message: 'Seed completed successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Seed failed', error: error.message });
+  }
 });
 
 app.use(async (req, res, next) => {

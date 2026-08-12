@@ -42,5 +42,12 @@ export async function seed() {
 
 const isDirect = process.argv[1] && process.argv[1].endsWith(new URL(import.meta.url).pathname.split('/').pop());
 if (isDirect) {
-  seed().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
+  seed().then(() => process.exit(0)).catch((e) => {
+    if (process.env.VERCEL) {
+      console.warn('Seed did not run (non-fatal during Vercel build): ' + e.message);
+      process.exit(0);
+    }
+    console.error(e);
+    process.exit(1);
+  });
 }
