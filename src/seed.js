@@ -8,7 +8,7 @@ const properties=[
 ];
 await connectDB();
 const email=(process.env.ADMIN_EMAIL||'admin@example.com').toLowerCase(); const pass=process.env.ADMIN_PASSWORD||'ChangeMe123!';
-if(!(await Admin.findOne({email}))) await Admin.create({name:'Ahmad Wattoo',email,passwordHash:await bcrypt.hash(pass,12),role:'admin'});
+await Admin.findOneAndUpdate({email},{name:'Ahmad Wattoo',email,passwordHash:await bcrypt.hash(pass,12),role:'admin'},{upsert:true,new:true,setDefaultsOnInsert:true});
 if(await Service.countDocuments()===0) await Service.insertMany(services.map((x,i)=>({title:x[0],description:x[1],icon:x[2],order:i})));
 if(await Property.countDocuments()===0) await Property.insertMany(properties.map((x,i)=>({title:x[0],description:x[1],propertyType:x[2],listingType:x[3],price:x[4],currency:'PKR',location:x[5],city:'Gujranwala',area:x[6],featuredImage:x[7],images:[{url:x[7],caption:x[0]}],bedrooms:x[8],bathrooms:x[9],status:'published',featured:i<3,availability:'available',shortDescription:x[1]})));
 if(await Gallery.countDocuments()===0) await Gallery.insertMany([{title:'Canal Road Residence',description:'Contemporary family residence',image:{url:'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1400&q=85'}},{title:'Modern Living',description:'Premium interior detail',image:{url:'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=1400&q=85'}},{title:'Executive Exterior',description:'Architectural detail',image:{url:'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=1400&q=85'}}]);
