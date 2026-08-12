@@ -1,20 +1,22 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import mongoose from 'mongoose';
 import Property from '../models/Property.js';
 import { protect } from '../middleware/auth.js';
 import { slugify } from '../utils/slug.js';
+import { uploadToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 
 const router = express.Router();
-const uploadDir = path.resolve('uploads');
-fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '-')}`),
-});
+const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+async function cleanupImages(images) {
+  if (!Array.isArray(images)) return;
+  await Promise.allSettled(
+    images.map((img) => img?.publicId ? deleteFromCloudinary(img.publicId).catch(() => {}) : Promise.resolve())
+  );
+}
 
 router.get('/', async (req, res, next) => {
   try {
@@ -68,8 +70,9 @@ router.get('/admin/all', protect, async (req, res, next) => {
 router.get('/:slug', async (req, res, next) => {
   try {
     const { slug } = req.params;
-    const q = { slug };
-    if (slug.length === 24 && /^[0-9a-fA-F]{24}$/.test(slug)) q._id = slug;
+    const q = slug.length === 24 && /^[0-9a-fA-F]{24}$/.test(slug)
+      ? { $or: [{ slug }, { _id: new mongoose.Types.ObjectId(slug) }] }
+      : { slug };
     const data = await Property.findOne(q);
     if (!data) return res.status(404).json({ message: 'Property not found' });
     res.json({ data });
@@ -93,8 +96,17 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
+    const existing = await Property.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Property not found' });
+
+    const removedImages = (existing.images || []).filter(
+      (oldImg) => !(req.body.images || []).some((newImg) => newImg?.publicId === oldImg.publicId)
+    );
+
     const data = await Property.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!data) return res.status(404).json({ message: 'Property not found' });
+    if (removedImages.length > 0) {
+      cleanupImages(removedImages).catch(() => {});
+    }
     res.json({ data });
   } catch (e) {
     next(e);
@@ -103,6 +115,10 @@ router.put('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
+    const existing = await Property.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Property not found' });
+
+    await cleanupImages(existing.images || []);
     await Property.findByIdAndDelete(req.params.id);
     res.json({ message: 'Deleted' });
   } catch (e) {
@@ -110,14 +126,19 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/upload', upload.single('image'), (req, res) => {
+router.post('/upload', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
-  res.json({
-    data: {
-      url: `${process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`}/uploads/${req.file.filename}`,
-      publicId: req.file.filename,
-    },
-  });
+  try {
+    const result = await uploadToCloudinary(req.file.buffer, 'properties');
+    res.json({
+      data: {
+        url: result.secure_url,
+        publicId: result.public_id,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
 });
 
 export default router;
