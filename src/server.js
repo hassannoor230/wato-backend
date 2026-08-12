@@ -42,6 +42,8 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+app.set('trust proxy', 1);
+
 app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 
 app.get('/', (req, res) => {
